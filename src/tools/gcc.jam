@@ -48,6 +48,11 @@ type.set-generated-target-suffix OBJ : <toolset>gcc : o ;
 type.set-generated-target-suffix OBJ : <toolset>gcc <target-os>windows : o ;
 type.set-generated-target-suffix OBJ : <toolset>gcc <target-os>cygwin : o ;
 
+# Should be called PDB on Windows. Also prefixes should not be set on windows or cygwin
+
+type.register SO_DEBUG : so.debug ;
+type.set-generated-target-prefix SO_DEBUG : <toolset>gcc : lib ;
+type.register DEBUG : debug ;
 
 # Initializes the gcc toolset for the given version. If necessary, command may
 # be used to specify where the compiler is located. The parameter 'options' is a
@@ -715,12 +720,12 @@ generators.register $(g) ;
 generators.register
   [ new gcc-linking-generator gcc.link
       : LIB OBJ
-      : EXE
+      : DEBUG EXE
       : <toolset>gcc ] ;
 generators.register
   [ new gcc-linking-generator gcc.link.dll
       : LIB OBJ
-      : SHARED_LIB
+      : SO_DEBUG SHARED_LIB
       : <toolset>gcc ] ;
 
 generators.override gcc.mingw.link : gcc.link ;
@@ -952,7 +957,10 @@ rule link ( targets * : sources * : properties * )
 
 actions link bind LIBRARIES
 {
-    "$(CONFIG_COMMAND)" -L"$(LINKPATH)" -Wl,$(RPATH_OPTION:E=-R)$(SPACE)-Wl,$(RPATH) -Wl,-rpath-link$(SPACE)-Wl,"$(RPATH_LINK)" -o "$(<)" $(START-GROUP) "$(>)" "$(LIBRARIES)" $(FINDLIBS-ST-PFX) -l$(FINDLIBS-ST) $(FINDLIBS-SA-PFX) -l$(FINDLIBS-SA) $(END-GROUP) $(OPTIONS) $(USER_OPTIONS)
+    "$(CONFIG_COMMAND)" -L"$(LINKPATH)" -Wl,$(RPATH_OPTION:E=-R)$(SPACE)-Wl,$(RPATH) -Wl,-rpath-link$(SPACE)-Wl,"$(RPATH_LINK)" -o "$(<[-1])" $(START-GROUP) "$(>)" "$(LIBRARIES)" $(FINDLIBS-ST-PFX) -l$(FINDLIBS-ST) $(FINDLIBS-SA-PFX) -l$(FINDLIBS-SA) $(END-GROUP) $(OPTIONS) $(USER_OPTIONS)
+    objcopy --only-keep-debug "$(<[-1])" "$(<[-1]).debug"
+    strip --strip-debug --strip-unneeded "$(<[-1])"
+    objcopy --add-gnu-debuglink="$(<[-1]).debug" "$(<[-1])"
 }
 
 
@@ -1019,6 +1027,10 @@ rule link.dll ( targets * : sources * : properties * )
 actions link.dll bind LIBRARIES
 {
     "$(CONFIG_COMMAND)" -L"$(LINKPATH)" -Wl,$(RPATH_OPTION:E=-R)$(SPACE)-Wl,$(RPATH) "$(.IMPLIB-COMMAND)$(<[1])" -o "$(<[-1])" $(HAVE_SONAME)-Wl,$(SONAME_OPTION)$(SPACE)-Wl,$(<[-1]:D=) -shared $(START-GROUP) "$(>)" "$(LIBRARIES)" $(FINDLIBS-ST-PFX) -l$(FINDLIBS-ST) $(FINDLIBS-SA-PFX) -l$(FINDLIBS-SA) $(END-GROUP) $(OPTIONS) $(USER_OPTIONS)
+    objcopy --only-keep-debug "$(<[-1])" "$(<[-1]).debug"
+    strip --strip-debug --strip-unneeded "$(<[-1])"
+    objcopy --add-gnu-debuglink="$(<[-1]).debug" "$(<[-1])"
+
 }
 
 rule setup-threading ( targets * : sources * : properties * )
